@@ -807,6 +807,35 @@ func (ds *Plugin) PruneCAJournals(ctx context.Context, allAuthoritiesExpireBefor
 	})
 }
 
+// SetBundlePublishStatus stores the publishing status for a bundle publisher.
+// If a status does not exist for the trust domain and plugin pair, it is
+// created; otherwise it is updated.
+func (ds *Plugin) SetBundlePublishStatus(ctx context.Context, status *datastore.BundlePublishStatus) (out *datastore.BundlePublishStatus, err error) {
+	if err := validateBundlePublishStatus(status); err != nil {
+		return nil, err
+	}
+
+	if err = ds.withReadModifyWriteTx(ctx, func(tx *gorm.DB) (err error) {
+		out, err = setBundlePublishStatus(tx, status)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// FetchBundlePublishStatuses returns all the stored bundle publishing
+// statuses.
+func (ds *Plugin) FetchBundlePublishStatuses(ctx context.Context) (statuses []*datastore.BundlePublishStatus, err error) {
+	if err = ds.withReadTx(ctx, func(tx *gorm.DB) (err error) {
+		statuses, err = fetchBundlePublishStatuses(tx)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return statuses, nil
+}
+
 func (ds *Plugin) pruneCAJournals(tx *gorm.DB, allAuthoritiesExpireBefore int64) error {
 	var caJournals []CAJournal
 	if err := tx.Find(&caJournals).Error; err != nil {
@@ -5069,6 +5098,67 @@ func deleteCAJournal(tx *gorm.DB, caJournalID uint) error {
 		return sqlcommon.NewWrappedSQLError(err)
 	}
 	return nil
+}
+
+func validateBundlePublishStatus(publishStatus *datastore.BundlePublishStatus) error {
+	switch {
+	case publishStatus == nil:
+		return status.Error(codes.InvalidArgument, "bundle publish status is required")
+	case publishStatus.TrustDomainID == "":
+		return status.Error(codes.InvalidArgument, "trust domain ID is required")
+	case publishStatus.PluginName == "":
+		return status.Error(codes.InvalidArgument, "plugin name is required")
+	}
+	return nil
+}
+
+func setBundlePublishStatus(tx *gorm.DB, publishStatus *datastore.BundlePublishStatus) (*datastore.BundlePublishStatus, error) {
+	model := &BundlePublishStatus{}
+	result := tx.Find(model, "trust_domain = ? AND plugin_name = ?", publishStatus.TrustDomainID, publishStatus.PluginName)
+	switch {
+	case result.RecordNotFound():
+		model = bundlePublishStatusToModel(publishStatus)
+		if err := tx.Create(model).Error; err != nil {
+			return nil, sqlcommon.NewWrappedSQLError(err)
+		}
+	case result.Error != nil:
+		return nil, sqlcommon.NewWrappedSQLError(result.Error)
+	default:
+		model.BundleSequence = publishStatus.BundleSequence
+		if err := tx.Save(model).Error; err != nil {
+			return nil, sqlcommon.NewWrappedSQLError(err)
+		}
+	}
+	return modelToBundlePublishStatus(model), nil
+}
+
+func fetchBundlePublishStatuses(tx *gorm.DB) ([]*datastore.BundlePublishStatus, error) {
+	var models []BundlePublishStatus
+	if err := tx.Find(&models).Error; err != nil {
+		return nil, sqlcommon.NewWrappedSQLError(err)
+	}
+
+	statuses := make([]*datastore.BundlePublishStatus, 0, len(models))
+	for i := range models {
+		statuses = append(statuses, modelToBundlePublishStatus(&models[i]))
+	}
+	return statuses, nil
+}
+
+func bundlePublishStatusToModel(status *datastore.BundlePublishStatus) *BundlePublishStatus {
+	return &BundlePublishStatus{
+		TrustDomain:    status.TrustDomainID,
+		PluginName:     status.PluginName,
+		BundleSequence: status.BundleSequence,
+	}
+}
+
+func modelToBundlePublishStatus(model *BundlePublishStatus) *datastore.BundlePublishStatus {
+	return &datastore.BundlePublishStatus{
+		TrustDomainID:  model.TrustDomain,
+		PluginName:     model.PluginName,
+		BundleSequence: model.BundleSequence,
+	}
 }
 
 // maxPaginationToken returns the largest ID value the dialect's primary key

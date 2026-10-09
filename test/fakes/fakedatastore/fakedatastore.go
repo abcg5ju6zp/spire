@@ -452,6 +452,20 @@ func (s *DataStore) PruneCAJournals(ctx context.Context, allCAsExpireBefore int6
 	return s.ds.PruneCAJournals(ctx, allCAsExpireBefore)
 }
 
+func (s *DataStore) SetBundlePublishStatus(ctx context.Context, status *datastore.BundlePublishStatus) (*datastore.BundlePublishStatus, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, err
+	}
+	return s.ds.SetBundlePublishStatus(ctx, status)
+}
+
+func (s *DataStore) FetchBundlePublishStatuses(ctx context.Context) ([]*datastore.BundlePublishStatus, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, err
+	}
+	return s.ds.FetchBundlePublishStatuses(ctx)
+}
+
 func (s *DataStore) SetNextError(err error) {
 	s.errs = []error{err}
 }

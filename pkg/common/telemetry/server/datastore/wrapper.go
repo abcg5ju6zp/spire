@@ -316,3 +316,15 @@ func (w metricsWrapper) PruneCAJournals(ctx context.Context, allCAsExpireBefore 
 	defer callCounter.Done(&err)
 	return w.ds.PruneCAJournals(ctx, allCAsExpireBefore)
 }
+
+func (w metricsWrapper) SetBundlePublishStatus(ctx context.Context, status *datastore.BundlePublishStatus) (_ *datastore.BundlePublishStatus, err error) {
+	callCounter := StartSetBundlePublishStatus(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.SetBundlePublishStatus(ctx, status)
+}
+
+func (w metricsWrapper) FetchBundlePublishStatuses(ctx context.Context) (_ []*datastore.BundlePublishStatus, err error) {
+	callCounter := StartFetchBundlePublishStatuses(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.FetchBundlePublishStatuses(ctx)
+}

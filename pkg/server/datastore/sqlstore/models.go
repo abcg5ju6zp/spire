@@ -205,7 +205,7 @@ type CAJournal struct {
 }
 
 // Migration holds database schema version number, and
-// the SPIRE Code version number
+// SPIRE Code version number
 type Migration struct {
 	Model
 
@@ -214,4 +214,27 @@ type Migration struct {
 
 	// SPIRE Code versioning
 	CodeVersion string
+}
+
+// BundlePublishStatus holds the sequence number of the last trust bundle
+// version that was confirmed published through a specific BundlePublisher
+// plugin. There is one record per trust domain and plugin name.
+type BundlePublishStatus struct {
+	Model
+
+	// TrustDomain is the ID of the trust domain whose bundle is published.
+	TrustDomain string `gorm:"not null;unique_index:idx_bundle_publish_status_td_plugin"`
+
+	// PluginName is the name of the BundlePublisher plugin the status
+	// belongs to.
+	PluginName string `gorm:"not null;unique_index:idx_bundle_publish_status_td_plugin"`
+
+	// BundleSequence is the sequence number of the last confirmed published
+	// bundle version.
+	BundleSequence uint64
+}
+
+// TableName gets the table name of BundlePublishStatus
+func (BundlePublishStatus) TableName() string {
+	return "bundle_publish_statuses"
 }

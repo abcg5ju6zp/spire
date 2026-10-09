@@ -287,11 +287,13 @@ import (
 // | v1.16.0 | 26     | Added journal_id column to ca_journals                                    |
 // |         |--------|---------------------------------------------------------------------------|
 // |         | 27     | Added wit_svid_ttl column to registered_entries                           |
+// |         |--------|---------------------------------------------------------------------------|
+// |         | 28     | Added bundle_publish_statuses table                                      |
 // ================================================================================================
 
 const (
 	// the latest schema version of the database in the code
-	latestSchemaVersion = 27
+	latestSchemaVersion = 28
 
 	// lastMinorReleaseSchemaVersion is the schema version supported by the
 	// last minor release. When the migrations are opportunistically pruned
@@ -451,6 +453,7 @@ func initDB(db *gorm.DB, dbType string, log logrus.FieldLogger) (err error) {
 		&DNSName{},
 		&FederatedTrustDomain{},
 		CAJournal{},
+		&BundlePublishStatus{},
 	}
 
 	if err := tableOptionsForDialect(tx, dbType).AutoMigrate(tables...).Error; err != nil {
@@ -530,6 +533,8 @@ func migrateVersion(tx *gorm.DB, currVersion int, log logrus.FieldLogger) (versi
 		err = migrateToV26(tx)
 	case 26:
 		err = migrateToV27(tx)
+	case 27:
+		err = migrateToV28(tx)
 	default:
 		err = sqlcommon.NewSQLError("no migration support for unknown schema version %d", currVersion)
 	}
@@ -567,6 +572,15 @@ func migrateToV26(tx *gorm.DB) error {
 func migrateToV27(tx *gorm.DB) error {
 	// Add wit_svid_ttl column to registered_entries table
 	if err := tx.AutoMigrate(&RegisteredEntry{}).Error; err != nil {
+		return sqlcommon.NewWrappedSQLError(err)
+	}
+	return nil
+}
+
+func migrateToV28(tx *gorm.DB) error {
+	// Add table to track trust bundle publishing progress per
+	// BundlePublisher plugin.
+	if err := tx.AutoMigrate(&BundlePublishStatus{}).Error; err != nil {
 		return sqlcommon.NewWrappedSQLError(err)
 	}
 	return nil

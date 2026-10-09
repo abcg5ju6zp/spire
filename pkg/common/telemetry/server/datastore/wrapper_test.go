@@ -233,6 +233,14 @@ func TestWithMetrics(t *testing.T) {
 			key:        "datastore.ca_journal.prune",
 			methodName: "PruneCAJournals",
 		},
+		{
+			key:        "datastore.bundle_publish_status.set",
+			methodName: "SetBundlePublishStatus",
+		},
+		{
+			key:        "datastore.bundle_publish_status.fetch",
+			methodName: "FetchBundlePublishStatuses",
+		},
 	} {
 		methodType, ok := wt.MethodByName(tt.methodName)
 		require.True(t, ok, "method %q does not exist on DataStore interface", tt.methodName)
@@ -390,6 +398,14 @@ func (ds *fakeDataStore) FetchAttestedNodeEvent(context.Context, uint) (*datasto
 
 func (ds *fakeDataStore) FetchBundle(context.Context, string) (*common.Bundle, error) {
 	return &common.Bundle{}, ds.err
+}
+
+func (ds *fakeDataStore) FetchBundlePublishStatuses(context.Context) ([]*datastore.BundlePublishStatus, error) {
+	return []*datastore.BundlePublishStatus{}, ds.err
+}
+
+func (ds *fakeDataStore) SetBundlePublishStatus(context.Context, *datastore.BundlePublishStatus) (*datastore.BundlePublishStatus, error) {
+	return &datastore.BundlePublishStatus{}, ds.err
 }
 
 func (ds *fakeDataStore) FetchFederationRelationship(context.Context, spiffeid.TrustDomain) (*datastore.FederationRelationship, error) {

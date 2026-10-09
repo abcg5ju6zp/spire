@@ -451,11 +451,42 @@ func TestMigration(t *testing.T) {
 				require.Len(caJournals, 1)
 				require.Equal(uint(1), caJournals[0].ID)
 			case 26:
-				// Migration from v26 to v27 adds wit_svid_ttl column
-				prepareDB(true)
-			default:
-				t.Fatalf("no migration test added for schema version %d", schemaVersion)
-			}
+			// Migration from v26 to v27 adds wit_svid_ttl column
+			prepareDB(true)
+		case 27:
+			// Migration from v27 to v28 adds bundle_publish_statuses table
+			prepareDB(true)
+
+			// The table is created by the migration and can store one
+			// publishing status per trust domain and plugin.
+			status, err := ds.SetBundlePublishStatus(ctx, &datastore.BundlePublishStatus{
+				TrustDomainID:  "spiffe://example.org",
+				PluginName:     "plugin-1",
+				BundleSequence: 1,
+			})
+			require.NoError(err)
+			require.NotZero(status)
+
+			statuses, err := ds.FetchBundlePublishStatuses(ctx)
+			require.NoError(err)
+			require.Len(statuses, 1)
+			require.Equal("spiffe://example.org", statuses[0].TrustDomainID)
+			require.Equal("plugin-1", statuses[0].PluginName)
+			require.Equal(uint64(1), statuses[0].BundleSequence)
+
+			// Saving the same trust domain and plugin updates the existing
+			// record instead of creating a new one.
+			status.BundleSequence = 2
+			_, err = ds.SetBundlePublishStatus(ctx, status)
+			require.NoError(err)
+
+			statuses, err = ds.FetchBundlePublishStatuses(ctx)
+			require.NoError(err)
+			require.Len(statuses, 1)
+			require.Equal(uint64(2), statuses[0].BundleSequence)
+		default:
+			t.Fatalf("no migration test added for schema version %d", schemaVersion)
+		}
 		})
 	}
 }

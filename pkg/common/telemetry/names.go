@@ -187,6 +187,9 @@ const (
 	// CAJournalID tags a CA journal ID
 	CAJournalID = "ca_journal_id"
 
+	// BundlePublishStatus is a bundle publishing status record
+	BundlePublishStatus = "bundle_publish_status"
+
 	// CallerAddr labels an API caller address
 	CallerAddr = "caller_addr"
 

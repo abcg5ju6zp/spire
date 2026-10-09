@@ -80,6 +80,10 @@ type DataStore interface {
 	SetCAJournal(ctx context.Context, caJournal *CAJournal) (*CAJournal, error)
 	FetchCAJournal(ctx context.Context, activeX509AuthorityID string) (*CAJournal, error)
 	PruneCAJournals(ctx context.Context, allCAsExpireBefore int64) error
+
+	// Bundle Publish Statuses
+	SetBundlePublishStatus(ctx context.Context, status *BundlePublishStatus) (*BundlePublishStatus, error)
+	FetchBundlePublishStatuses(ctx context.Context) ([]*BundlePublishStatus, error)
 }
 
 // TestableDataStore extends DataStore with helper methods that are only meant
@@ -229,6 +233,27 @@ type CAJournal struct {
 	ID                    uint
 	Data                  []byte
 	ActiveX509AuthorityID string
+}
+
+// BundlePublishStatus records the publishing progress of the trust bundle for
+// a single BundlePublisher plugin. A record exists per pair of trust domain
+// and plugin name, and holds the sequence number of the last bundle version
+// that was confirmed published through that plugin. It allows the bundle
+// publishing manager to resume independently per publisher after failures or
+// restarts instead of treating a publishing round as an all-or-nothing
+// operation.
+type BundlePublishStatus struct {
+	// TrustDomainID is the ID of the trust domain whose bundle is published.
+	TrustDomainID string
+
+	// PluginName is the name of the BundlePublisher plugin the status
+	// belongs to.
+	PluginName string
+
+	// BundleSequence is the sequence number of the last bundle version
+	// confirmed published by the plugin. A value of zero means that no
+	// bundle version has been confirmed published yet.
+	BundleSequence uint64
 }
 
 type ListRegistrationEntriesResponse struct {
