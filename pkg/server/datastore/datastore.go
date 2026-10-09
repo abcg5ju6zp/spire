@@ -44,6 +44,17 @@ type DataStore interface {
 	PruneRegistrationEntryEvents(ctx context.Context, olderThan time.Duration) error
 	FetchRegistrationEntryEvent(ctx context.Context, eventID uint) (*RegistrationEntryEvent, error)
 
+	// Recoverable Entry batch operations. The per-item results are committed
+	// atomically with the corresponding registration entry mutation so that
+	// retrying a batch request with the same operation ID never applies a
+	// mutation more than once.
+	CreateEntryBatchOperation(ctx context.Context, op *EntryBatchOperation) error
+	FetchEntryBatchOperation(ctx context.Context, operationID string) (*EntryBatchOperation, error)
+	CreateOrReturnRegistrationEntryForBatchOperation(ctx context.Context, entry *common.RegistrationEntry, operationID string, itemIndex int) (*common.RegistrationEntry, bool, error)
+	UpdateRegistrationEntryForBatchOperation(ctx context.Context, entry *common.RegistrationEntry, mask *common.RegistrationEntryMask, operationID string, itemIndex int) (*common.RegistrationEntry, error)
+	DeleteRegistrationEntryForBatchOperation(ctx context.Context, entryID string, operationID string, itemIndex int) (*common.RegistrationEntry, error)
+	PruneEntryBatchOperations(ctx context.Context, expiredBefore time.Time) error
+
 	// Nodes
 	CountAttestedNodes(context.Context, *CountAttestedNodesRequest) (int32, error)
 	CreateAttestedNode(context.Context, *common.AttestedNode) (*common.AttestedNode, error)

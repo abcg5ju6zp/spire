@@ -287,11 +287,13 @@ import (
 // | v1.16.0 | 26     | Added journal_id column to ca_journals                                    |
 // |         |--------|---------------------------------------------------------------------------|
 // |         | 27     | Added wit_svid_ttl column to registered_entries                           |
+// |---------|        |---------------------------------------------------------------------------|
+// | v1.17.0 | 28     | Added entry_batch_operations and entry_batch_operation_items tables       |
 // ================================================================================================
 
 const (
 	// the latest schema version of the database in the code
-	latestSchemaVersion = 27
+	latestSchemaVersion = 28
 
 	// lastMinorReleaseSchemaVersion is the schema version supported by the
 	// last minor release. When the migrations are opportunistically pruned
@@ -445,6 +447,8 @@ func initDB(db *gorm.DB, dbType string, log logrus.FieldLogger) (err error) {
 		&NodeSelector{},
 		&RegisteredEntry{},
 		&RegisteredEntryEvent{},
+		&EntryBatchOp{},
+		&EntryBatchOpItem{},
 		&JoinToken{},
 		&Selector{},
 		&Migration{},
@@ -530,6 +534,8 @@ func migrateVersion(tx *gorm.DB, currVersion int, log logrus.FieldLogger) (versi
 		err = migrateToV26(tx)
 	case 26:
 		err = migrateToV27(tx)
+	case 27:
+		err = migrateToV28(tx)
 	default:
 		err = sqlcommon.NewSQLError("no migration support for unknown schema version %d", currVersion)
 	}
@@ -567,6 +573,15 @@ func migrateToV26(tx *gorm.DB) error {
 func migrateToV27(tx *gorm.DB) error {
 	// Add wit_svid_ttl column to registered_entries table
 	if err := tx.AutoMigrate(&RegisteredEntry{}).Error; err != nil {
+		return sqlcommon.NewWrappedSQLError(err)
+	}
+	return nil
+}
+
+func migrateToV28(tx *gorm.DB) error {
+	// Add tables that persist recoverable Entry batch operations and their
+	// per-item results.
+	if err := tx.AutoMigrate(&EntryBatchOp{}, &EntryBatchOpItem{}).Error; err != nil {
 		return sqlcommon.NewWrappedSQLError(err)
 	}
 	return nil

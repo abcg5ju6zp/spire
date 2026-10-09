@@ -136,8 +136,9 @@ func (a *AuthorizedEntryFetcherEvents) PruneEventsTask(ctx context.Context) erro
 func (a *AuthorizedEntryFetcherEvents) pruneEvents(ctx context.Context, olderThan time.Duration) error {
 	pruneRegistrationEntryEventsErr := a.c.ds.PruneRegistrationEntryEvents(ctx, olderThan)
 	pruneAttestedNodeEventsErr := a.c.ds.PruneAttestedNodeEvents(ctx, olderThan)
+	pruneEntryBatchOperationsErr := a.c.ds.PruneEntryBatchOperations(ctx, time.Now().Add(-olderThan))
 
-	return errors.Join(pruneRegistrationEntryEventsErr, pruneAttestedNodeEventsErr)
+	return errors.Join(pruneRegistrationEntryEventsErr, pruneAttestedNodeEventsErr, pruneEntryBatchOperationsErr)
 }
 
 func (a *AuthorizedEntryFetcherEvents) updateCache(ctx context.Context) error {

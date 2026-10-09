@@ -263,9 +263,23 @@ func (s *Service) GetEntry(ctx context.Context, req *entryv1.GetEntryRequest) (*
 
 // BatchCreateEntry adds one or more entries to the server.
 func (s *Service) BatchCreateEntry(ctx context.Context, req *entryv1.BatchCreateEntryRequest) (*entryv1.BatchCreateEntryResponse, error) {
+	log := rpccontext.Logger(ctx)
+
+	opID, err := operationIDFromContext(ctx)
+	if err != nil {
+		return nil, commonapi.MakeErr(log, codes.InvalidArgument, err.Error(), nil)
+	}
+	if opID != "" {
+		rpccontext.AddRPCAuditFields(ctx, logrus.Fields{telemetry.OperationID: opID})
+		if err := s.beginEntryBatchOperation(ctx, datastore.BatchCreateEntryOperation, batchCreateRequestFingerprint(req), len(req.Entries), opID); err != nil {
+			return nil, err
+		}
+		annotateEntryBatchOperation(ctx, opID)
+	}
+
 	var results []*entryv1.BatchCreateEntryResponse_Result
-	for _, eachEntry := range req.Entries {
-		r := s.createEntry(ctx, eachEntry, req.OutputMask)
+	for i, eachEntry := range req.Entries {
+		r := s.createEntry(ctx, eachEntry, req.OutputMask, opID, i)
 		results = append(results, r)
 		rpccontext.AuditRPCWithTypesStatus(ctx, r.Status, func() logrus.Fields {
 			return fieldsFromEntryProto(ctx, eachEntry, nil)
@@ -277,7 +291,7 @@ func (s *Service) BatchCreateEntry(ctx context.Context, req *entryv1.BatchCreate
 	}, nil
 }
 
-func (s *Service) createEntry(ctx context.Context, e *types.Entry, outputMask *types.EntryMask) *entryv1.BatchCreateEntryResponse_Result {
+func (s *Service) createEntry(ctx context.Context, e *types.Entry, outputMask *types.EntryMask, opID string, itemIndex int) *entryv1.BatchCreateEntryResponse_Result {
 	log := rpccontext.Logger(ctx)
 
 	cEntry, err := api.ProtoToRegistrationEntry(ctx, s.td, e)
@@ -290,7 +304,13 @@ func (s *Service) createEntry(ctx context.Context, e *types.Entry, outputMask *t
 	log = log.WithField(telemetry.SPIFFEID, cEntry.SpiffeId)
 
 	resultStatus := commonapi.OK()
-	regEntry, existing, err := s.ds.CreateOrReturnRegistrationEntry(ctx, cEntry)
+	var regEntry *common.RegistrationEntry
+	var existing bool
+	if opID != "" {
+		regEntry, existing, err = s.ds.CreateOrReturnRegistrationEntryForBatchOperation(ctx, cEntry, opID, itemIndex)
+	} else {
+		regEntry, existing, err = s.ds.CreateOrReturnRegistrationEntry(ctx, cEntry)
+	}
 	switch {
 	case err != nil:
 		statusCode := status.Code(err)
@@ -321,10 +341,24 @@ func (s *Service) createEntry(ctx context.Context, e *types.Entry, outputMask *t
 
 // BatchUpdateEntry updates one or more entries in the server.
 func (s *Service) BatchUpdateEntry(ctx context.Context, req *entryv1.BatchUpdateEntryRequest) (*entryv1.BatchUpdateEntryResponse, error) {
+	log := rpccontext.Logger(ctx)
+
+	opID, err := operationIDFromContext(ctx)
+	if err != nil {
+		return nil, commonapi.MakeErr(log, codes.InvalidArgument, err.Error(), nil)
+	}
+	if opID != "" {
+		rpccontext.AddRPCAuditFields(ctx, logrus.Fields{telemetry.OperationID: opID})
+		if err := s.beginEntryBatchOperation(ctx, datastore.BatchUpdateEntryOperation, batchUpdateRequestFingerprint(req), len(req.Entries), opID); err != nil {
+			return nil, err
+		}
+		annotateEntryBatchOperation(ctx, opID)
+	}
+
 	var results []*entryv1.BatchUpdateEntryResponse_Result
 
-	for _, eachEntry := range req.Entries {
-		e := s.updateEntry(ctx, eachEntry, req.InputMask, req.OutputMask)
+	for i, eachEntry := range req.Entries {
+		e := s.updateEntry(ctx, eachEntry, req.InputMask, req.OutputMask, opID, i)
 		results = append(results, e)
 		rpccontext.AuditRPCWithTypesStatus(ctx, e.Status, func() logrus.Fields {
 			return fieldsFromEntryProto(ctx, eachEntry, req.InputMask)
@@ -338,9 +372,23 @@ func (s *Service) BatchUpdateEntry(ctx context.Context, req *entryv1.BatchUpdate
 
 // BatchDeleteEntry removes one or more entries from the server.
 func (s *Service) BatchDeleteEntry(ctx context.Context, req *entryv1.BatchDeleteEntryRequest) (*entryv1.BatchDeleteEntryResponse, error) {
+	log := rpccontext.Logger(ctx)
+
+	opID, err := operationIDFromContext(ctx)
+	if err != nil {
+		return nil, commonapi.MakeErr(log, codes.InvalidArgument, err.Error(), nil)
+	}
+	if opID != "" {
+		rpccontext.AddRPCAuditFields(ctx, logrus.Fields{telemetry.OperationID: opID})
+		if err := s.beginEntryBatchOperation(ctx, datastore.BatchDeleteEntryOperation, batchDeleteRequestFingerprint(req), len(req.Ids), opID); err != nil {
+			return nil, err
+		}
+		annotateEntryBatchOperation(ctx, opID)
+	}
+
 	var results []*entryv1.BatchDeleteEntryResponse_Result
-	for _, id := range req.Ids {
-		r := s.deleteEntry(ctx, id)
+	for i, id := range req.Ids {
+		r := s.deleteEntry(ctx, id, opID, i)
 		results = append(results, r)
 		rpccontext.AuditRPCWithTypesStatus(ctx, r.Status, func() logrus.Fields {
 			return logrus.Fields{telemetry.RegistrationID: id}
@@ -352,7 +400,7 @@ func (s *Service) BatchDeleteEntry(ctx context.Context, req *entryv1.BatchDelete
 	}, nil
 }
 
-func (s *Service) deleteEntry(ctx context.Context, id string) *entryv1.BatchDeleteEntryResponse_Result {
+func (s *Service) deleteEntry(ctx context.Context, id string, opID string, itemIndex int) *entryv1.BatchDeleteEntryResponse_Result {
 	log := rpccontext.Logger(ctx)
 
 	if id == "" {
@@ -364,7 +412,12 @@ func (s *Service) deleteEntry(ctx context.Context, id string) *entryv1.BatchDele
 
 	log = log.WithField(telemetry.RegistrationID, id)
 
-	_, err := s.ds.DeleteRegistrationEntry(ctx, id)
+	var err error
+	if opID != "" {
+		_, err = s.ds.DeleteRegistrationEntryForBatchOperation(ctx, id, opID, itemIndex)
+	} else {
+		_, err = s.ds.DeleteRegistrationEntry(ctx, id)
+	}
 	switch status.Code(err) {
 	case codes.OK:
 		return &entryv1.BatchDeleteEntryResponse_Result{
@@ -643,7 +696,7 @@ func applyMask(e *types.Entry, mask *types.EntryMask) {
 	}
 }
 
-func (s *Service) updateEntry(ctx context.Context, e *types.Entry, inputMask *types.EntryMask, outputMask *types.EntryMask) *entryv1.BatchUpdateEntryResponse_Result {
+func (s *Service) updateEntry(ctx context.Context, e *types.Entry, inputMask *types.EntryMask, outputMask *types.EntryMask, opID string, itemIndex int) *entryv1.BatchUpdateEntryResponse_Result {
 	log := rpccontext.Logger(ctx)
 	log = log.WithField(telemetry.RegistrationID, e.Id)
 
@@ -673,7 +726,12 @@ func (s *Service) updateEntry(ctx context.Context, e *types.Entry, inputMask *ty
 			AdditionalAttributes: inputMask.AdditionalAttributes,
 		}
 	}
-	dsEntry, err := s.ds.UpdateRegistrationEntry(ctx, convEntry, mask)
+	var dsEntry *common.RegistrationEntry
+	if opID != "" {
+		dsEntry, err = s.ds.UpdateRegistrationEntryForBatchOperation(ctx, convEntry, mask, opID, itemIndex)
+	} else {
+		dsEntry, err = s.ds.UpdateRegistrationEntry(ctx, convEntry, mask)
+	}
 	if err != nil {
 		statusCode := status.Code(err)
 		if statusCode == codes.Unknown {

@@ -122,6 +122,38 @@ func (RegisteredEntryEvent) TableName() string {
 	return "registered_entries_events"
 }
 
+// EntryBatchOp holds the identity of a recoverable Entry batch request.
+type EntryBatchOp struct {
+	Model
+
+	OperationID string `gorm:"not null;unique_index"`
+	Type        string
+	RequestHash []byte
+	ItemCount   int
+	ExpiresAt   int64 `gorm:"index"`
+}
+
+// TableName gets the table name for EntryBatchOp
+func (EntryBatchOp) TableName() string {
+	return "entry_batch_operations"
+}
+
+// EntryBatchOpItem holds the durable, per-item result of a recoverable Entry
+// batch request. The (OperationID, ItemIndex) tuple is unique.
+type EntryBatchOpItem struct {
+	Model
+
+	OperationID string `gorm:"not null;unique_index:idx_entry_batch_operation_item"`
+	ItemIndex   int    `gorm:"unique_index:idx_entry_batch_operation_item"`
+	Outcome     int
+	EntryData   []byte `gorm:"size:16777215"` // Make MySQL to use MEDIUMBLOB(max 16MB) - doesn't affect PostgreSQL/SQLite
+}
+
+// TableName gets the table name for EntryBatchOpItem
+func (EntryBatchOpItem) TableName() string {
+	return "entry_batch_operation_items"
+}
+
 // JoinToken holds a join token
 type JoinToken struct {
 	Model

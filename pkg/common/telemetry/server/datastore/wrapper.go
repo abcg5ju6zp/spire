@@ -101,6 +101,48 @@ func (w metricsWrapper) DeleteRegistrationEntry(ctx context.Context, entryID str
 	return w.ds.DeleteRegistrationEntry(ctx, entryID)
 }
 
+// CreateEntryBatchOperation wraps the datastore call with metrics.
+func (w metricsWrapper) CreateEntryBatchOperation(ctx context.Context, op *datastore.EntryBatchOperation) (err error) {
+	callCounter := StartCreateEntryBatchOperationCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.CreateEntryBatchOperation(ctx, op)
+}
+
+// FetchEntryBatchOperation wraps the datastore call with metrics.
+func (w metricsWrapper) FetchEntryBatchOperation(ctx context.Context, operationID string) (_ *datastore.EntryBatchOperation, err error) {
+	callCounter := StartFetchEntryBatchOperationCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.FetchEntryBatchOperation(ctx, operationID)
+}
+
+// CreateOrReturnRegistrationEntryForBatchOperation wraps the datastore call with metrics.
+func (w metricsWrapper) CreateOrReturnRegistrationEntryForBatchOperation(ctx context.Context, entry *common.RegistrationEntry, operationID string, itemIndex int) (_ *common.RegistrationEntry, _ bool, err error) {
+	callCounter := StartCreateRegistrationCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.CreateOrReturnRegistrationEntryForBatchOperation(ctx, entry, operationID, itemIndex)
+}
+
+// UpdateRegistrationEntryForBatchOperation wraps the datastore call with metrics.
+func (w metricsWrapper) UpdateRegistrationEntryForBatchOperation(ctx context.Context, entry *common.RegistrationEntry, mask *common.RegistrationEntryMask, operationID string, itemIndex int) (_ *common.RegistrationEntry, err error) {
+	callCounter := StartUpdateRegistrationCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.UpdateRegistrationEntryForBatchOperation(ctx, entry, mask, operationID, itemIndex)
+}
+
+// DeleteRegistrationEntryForBatchOperation wraps the datastore call with metrics.
+func (w metricsWrapper) DeleteRegistrationEntryForBatchOperation(ctx context.Context, entryID string, operationID string, itemIndex int) (_ *common.RegistrationEntry, err error) {
+	callCounter := StartDeleteRegistrationCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.DeleteRegistrationEntryForBatchOperation(ctx, entryID, operationID, itemIndex)
+}
+
+// PruneEntryBatchOperations wraps the datastore call with metrics.
+func (w metricsWrapper) PruneEntryBatchOperations(ctx context.Context, expiredBefore time.Time) (err error) {
+	callCounter := StartPruneEntryBatchOperationsCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.PruneEntryBatchOperations(ctx, expiredBefore)
+}
+
 func (w metricsWrapper) FetchAttestedNode(ctx context.Context, spiffeID string) (_ *common.AttestedNode, err error) {
 	callCounter := StartFetchNodeCall(w.m)
 	defer callCounter.Done(&err)

@@ -361,6 +361,48 @@ func (s *DataStore) FetchRegistrationEntryEvent(ctx context.Context, eventID uin
 	return s.ds.FetchRegistrationEntryEvent(ctx, eventID)
 }
 
+func (s *DataStore) CreateEntryBatchOperation(ctx context.Context, op *datastore.EntryBatchOperation) error {
+	if err := s.getNextError(); err != nil {
+		return err
+	}
+	return s.ds.CreateEntryBatchOperation(ctx, op)
+}
+
+func (s *DataStore) FetchEntryBatchOperation(ctx context.Context, operationID string) (*datastore.EntryBatchOperation, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, err
+	}
+	return s.ds.FetchEntryBatchOperation(ctx, operationID)
+}
+
+func (s *DataStore) CreateOrReturnRegistrationEntryForBatchOperation(ctx context.Context, entry *common.RegistrationEntry, operationID string, itemIndex int) (*common.RegistrationEntry, bool, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, false, err
+	}
+	return s.ds.CreateOrReturnRegistrationEntryForBatchOperation(ctx, entry, operationID, itemIndex)
+}
+
+func (s *DataStore) UpdateRegistrationEntryForBatchOperation(ctx context.Context, entry *common.RegistrationEntry, mask *common.RegistrationEntryMask, operationID string, itemIndex int) (*common.RegistrationEntry, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, err
+	}
+	return s.ds.UpdateRegistrationEntryForBatchOperation(ctx, entry, mask, operationID, itemIndex)
+}
+
+func (s *DataStore) DeleteRegistrationEntryForBatchOperation(ctx context.Context, entryID string, operationID string, itemIndex int) (*common.RegistrationEntry, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, err
+	}
+	return s.ds.DeleteRegistrationEntryForBatchOperation(ctx, entryID, operationID, itemIndex)
+}
+
+func (s *DataStore) PruneEntryBatchOperations(ctx context.Context, expiredBefore time.Time) error {
+	if err := s.getNextError(); err != nil {
+		return err
+	}
+	return s.ds.PruneEntryBatchOperations(ctx, expiredBefore)
+}
+
 func (s *DataStore) CreateJoinToken(ctx context.Context, token *datastore.JoinToken) error {
 	if err := s.getNextError(); err != nil {
 		return err

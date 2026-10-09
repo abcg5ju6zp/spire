@@ -58,7 +58,7 @@ func (l *logger) AuditWithError(err error) {
 
 func (l *logger) AuditWithTypesStatus(fields logrus.Fields, s *types.Status) {
 	statusFields := fieldsFromStatus(s)
-	l.log.WithFields(statusFields).WithFields(fields).Info(message)
+	l.log.WithFields(l.fields).WithFields(statusFields).WithFields(fields).Info(message)
 }
 
 func fieldsFromStatus(s *types.Status) logrus.Fields {

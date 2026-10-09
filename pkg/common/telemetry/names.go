@@ -438,6 +438,9 @@ const (
 	// Nonce tags some nonce for communication
 	Nonce = "nonce"
 
+	// OperationID tags the recoverable identity of a batch operation
+	OperationID = "operation_id"
+
 	// OldHash tags a hash
 	OldHash = "old_hash"
 
@@ -523,6 +526,9 @@ const (
 
 	// RegistrationEntry tags a registration entry
 	RegistrationEntry = "registration_entry"
+
+	// EntryBatchOperation tags a recoverable Entry batch operation
+	EntryBatchOperation = "entry_batch_operation"
 
 	// RegistrationEntryEvent is a notice a registration entry has been created, modified, or deleted
 	RegistrationEntryEvent = "registration_entry_event"

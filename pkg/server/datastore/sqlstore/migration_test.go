@@ -2,6 +2,7 @@ package sqlstore
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -185,6 +186,18 @@ var (
 		    `,
 	}
 )
+
+func init() {
+	// The v27 schema is the v26 schema plus the wit_svid_ttl column on
+	// registered_entries. Derive its dump from the v26 dump instead of
+	// duplicating the large fixture.
+	migrationDumps[27] = strings.NewReplacer(
+		`"jwt_svid_ttl" integer , "additional_attributes" blob)`,
+		`"jwt_svid_ttl" integer , "additional_attributes" blob, "wit_svid_ttl" integer)`,
+		`,26,'1.16.0-dev'`,
+		`,27,'1.17.0-dev'`,
+	).Replace(migrationDumps[26])
+}
 
 func dumpDB(t *testing.T, path string, statements string) {
 	db, err := sql.Open("sqlite3", path)

@@ -451,11 +451,20 @@ func TestMigration(t *testing.T) {
 				require.Len(caJournals, 1)
 				require.Equal(uint(1), caJournals[0].ID)
 			case 26:
-				// Migration from v26 to v27 adds wit_svid_ttl column
-				prepareDB(true)
-			default:
-				t.Fatalf("no migration test added for schema version %d", schemaVersion)
+			// Migration from v26 to v27 adds wit_svid_ttl column
+			prepareDB(true)
+		case 27:
+			// Migration from v27 to v28 adds the entry batch operation tables
+			prepareDB(true)
+
+			var tableCount struct {
+				Count int
 			}
+			require.NoError(ds.RawScan(&tableCount, `SELECT count(*) AS count FROM sqlite_master WHERE type = "table" AND name IN ("entry_batch_operations", "entry_batch_operation_items")`))
+			require.Equal(2, tableCount.Count)
+		default:
+			t.Fatalf("no migration test added for schema version %d", schemaVersion)
+		}
 		})
 	}
 }

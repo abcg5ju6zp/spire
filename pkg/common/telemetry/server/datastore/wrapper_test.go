@@ -78,6 +78,30 @@ func TestWithMetrics(t *testing.T) {
 			methodName: "CreateOrReturnRegistrationEntry",
 		},
 		{
+			key:        "datastore.entry_batch_operation.create",
+			methodName: "CreateEntryBatchOperation",
+		},
+		{
+			key:        "datastore.entry_batch_operation.fetch",
+			methodName: "FetchEntryBatchOperation",
+		},
+		{
+			key:        "datastore.registration_entry.create",
+			methodName: "CreateOrReturnRegistrationEntryForBatchOperation",
+		},
+		{
+			key:        "datastore.registration_entry.update",
+			methodName: "UpdateRegistrationEntryForBatchOperation",
+		},
+		{
+			key:        "datastore.registration_entry.delete",
+			methodName: "DeleteRegistrationEntryForBatchOperation",
+		},
+		{
+			key:        "datastore.entry_batch_operation.prune",
+			methodName: "PruneEntryBatchOperations",
+		},
+		{
 			key:        "datastore.node.delete",
 			methodName: "DeleteAttestedNode",
 		},
@@ -378,6 +402,30 @@ func (ds *fakeDataStore) DeleteJoinToken(context.Context, string) error {
 
 func (ds *fakeDataStore) DeleteRegistrationEntry(context.Context, string) (*common.RegistrationEntry, error) {
 	return &common.RegistrationEntry{}, ds.err
+}
+
+func (ds *fakeDataStore) CreateEntryBatchOperation(context.Context, *datastore.EntryBatchOperation) error {
+	return ds.err
+}
+
+func (ds *fakeDataStore) FetchEntryBatchOperation(context.Context, string) (*datastore.EntryBatchOperation, error) {
+	return &datastore.EntryBatchOperation{}, ds.err
+}
+
+func (ds *fakeDataStore) CreateOrReturnRegistrationEntryForBatchOperation(context.Context, *common.RegistrationEntry, string, int) (*common.RegistrationEntry, bool, error) {
+	return &common.RegistrationEntry{}, false, ds.err
+}
+
+func (ds *fakeDataStore) UpdateRegistrationEntryForBatchOperation(context.Context, *common.RegistrationEntry, *common.RegistrationEntryMask, string, int) (*common.RegistrationEntry, error) {
+	return &common.RegistrationEntry{}, ds.err
+}
+
+func (ds *fakeDataStore) DeleteRegistrationEntryForBatchOperation(context.Context, string, string, int) (*common.RegistrationEntry, error) {
+	return &common.RegistrationEntry{}, ds.err
+}
+
+func (ds *fakeDataStore) PruneEntryBatchOperations(context.Context, time.Time) error {
+	return ds.err
 }
 
 func (ds *fakeDataStore) FetchAttestedNode(context.Context, string) (*common.AttestedNode, error) {
