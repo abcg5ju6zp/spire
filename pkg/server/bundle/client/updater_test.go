@@ -391,6 +391,87 @@ func (d *authMissThenPresentDataStore) SetBundle(context.Context, *common.Bundle
 	return nil, errors.New("SetBundle must not run")
 }
 
+func TestBundleUpdaterCommitBundleHook(t *testing.T) {
+	bundle1 := spiffebundle.FromX509Authorities(trustDomain, []*x509.Certificate{createCACertificate(t, "bundle1")})
+	bundle2 := spiffebundle.FromX509Authorities(trustDomain, []*x509.Certificate{createCACertificate(t, "bundle2")})
+
+	t.Run("hook adopts the endpoint bundle on success", func(t *testing.T) {
+		ds := fakedatastore.New(t)
+		var gotLocal, gotFetched *spiffebundle.Bundle
+		var gotUsedBootstrap bool
+		updater := NewBundleUpdater(BundleUpdaterConfig{
+			DataStore:   ds,
+			TrustDomain: trustDomain,
+			TrustDomainConfig: TrustDomainConfig{
+				EndpointURL:     "ENDPOINT_ADDRESS",
+				EndpointProfile: HTTPSWebProfile{},
+			},
+			newClientHook: func(ClientConfig) (Client, error) {
+				return fakeClient{bundle: bundle2}, nil
+			},
+			commitBundleHook: func(_ context.Context, local, fetched *spiffebundle.Bundle, usedBootstrap bool) (*spiffebundle.Bundle, *spiffebundle.Bundle, error) {
+				gotLocal = local
+				gotFetched = fetched
+				gotUsedBootstrap = usedBootstrap
+				return local, fetched, nil
+			},
+		})
+
+		localBundleProto, err := bundleutil.SPIFFEBundleToProto(bundle1)
+		require.NoError(t, err)
+		_, err = ds.CreateBundle(context.Background(), localBundleProto)
+		require.NoError(t, err)
+
+		local, endpoint, err := updater.UpdateBundle(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, local)
+		require.Same(t, bundle2, endpoint)
+		require.Same(t, local, gotLocal)
+		require.True(t, sameX509Authorities(gotLocal, bundle1))
+		require.Same(t, bundle2, gotFetched)
+		require.False(t, gotUsedBootstrap)
+
+		// The hook owns persistence; the datastore is untouched by it.
+		stored, err := ds.FetchBundle(context.Background(), trustDomain.IDString())
+		require.NoError(t, err)
+		got, err := bundleutil.SPIFFEBundleFromProto(stored)
+		require.NoError(t, err)
+		require.True(t, sameX509Authorities(got, bundle1))
+	})
+
+	t.Run("hook rejection retains the local bundle and reports error", func(t *testing.T) {
+		ds := &countingDataStore{DataStore: fakedatastore.New(t)}
+		updater := NewBundleUpdater(BundleUpdaterConfig{
+			DataStore:   ds,
+			TrustDomain: trustDomain,
+			TrustDomainConfig: TrustDomainConfig{
+				EndpointURL:     "ENDPOINT_ADDRESS",
+				EndpointProfile: HTTPSWebProfile{},
+			},
+			newClientHook: func(ClientConfig) (Client, error) {
+				return fakeClient{bundle: bundle2}, nil
+			},
+			commitBundleHook: func(_ context.Context, local, fetched *spiffebundle.Bundle, _ bool) (*spiffebundle.Bundle, *spiffebundle.Bundle, error) {
+				// Simulate a stopped generation refusing to persist.
+				return local, nil, errBundleGenerationStopped
+			},
+		})
+
+		localBundleProto, err := bundleutil.SPIFFEBundleToProto(bundle1)
+		require.NoError(t, err)
+		_, err = ds.CreateBundle(context.Background(), localBundleProto)
+		require.NoError(t, err)
+		setsBefore, createsBefore := ds.sets, ds.creates
+
+		local, endpoint, err := updater.UpdateBundle(context.Background())
+		spiretest.RequireErrorContains(t, err, errBundleGenerationStopped.Error())
+		require.True(t, sameX509Authorities(local, bundle1))
+		require.Nil(t, endpoint)
+		require.Equal(t, setsBefore, ds.sets, "rejected bundle must not be persisted")
+		require.Equal(t, createsBefore, ds.creates)
+	})
+}
+
 func TestBundleUpdaterConfiguration(t *testing.T) {
 	configs := []TrustDomainConfig{
 		{

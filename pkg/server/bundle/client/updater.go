@@ -23,7 +23,27 @@ type BundleUpdaterConfig struct {
 
 	// newClientHook is a test hook for injecting client behavior
 	newClientHook func(ClientConfig) (Client, error)
+
+	// commitBundleHook, if set, is invoked after the endpoint bundle has been
+	// successfully downloaded and validated. The hook decides whether the
+	// fetched bundle must be persisted and performs the persistence. It
+	// allows the manager to scope writes to the configuration generation
+	// that fetched the bundle: once a generation has been superseded or
+	// deleted, its hook refuses to write. When unset, the updater persists
+	// directly through the datastore.
+	commitBundleHook commitBundleFunc
 }
+
+// commitBundleFunc commits a freshly fetched endpoint bundle after it has
+// been downloaded and validated. It returns the local bundle to report
+// (which may be a bundle concurrently discovered in the datastore), the
+// endpoint bundle if one was adopted, or an error if the fetched bundle
+// could not be committed.
+type commitBundleFunc func(ctx context.Context, local, fetched *spiffebundle.Bundle, usedBootstrap bool) (reportedLocal, endpoint *spiffebundle.Bundle, err error)
+
+// errBundleGenerationStopped is returned when a bundle updater generation
+// is asked to persist a bundle after the generation has been stopped.
+var errBundleGenerationStopped = errors.New("bundle updater generation is stopped; fetched bundle was not persisted")
 
 type BundleUpdater interface {
 	// UpdateBundle fetches the local bundle from the datastore and the
@@ -44,9 +64,10 @@ type BundleUpdater interface {
 }
 
 type bundleUpdater struct {
-	td            spiffeid.TrustDomain
-	ds            datastore.DataStore
-	newClientHook func(ClientConfig) (Client, error)
+	td               spiffeid.TrustDomain
+	ds               datastore.DataStore
+	newClientHook    func(ClientConfig) (Client, error)
+	commitBundleHook commitBundleFunc
 
 	trustDomainConfigMtx sync.Mutex
 	trustDomainConfig    TrustDomainConfig
@@ -60,6 +81,7 @@ func NewBundleUpdater(config BundleUpdaterConfig) BundleUpdater {
 		td:                config.TrustDomain,
 		ds:                config.DataStore,
 		newClientHook:     config.newClientHook,
+		commitBundleHook:  config.commitBundleHook,
 		trustDomainConfig: config.TrustDomainConfig,
 	}
 }
@@ -82,13 +104,29 @@ func (u *bundleUpdater) UpdateBundle(ctx context.Context) (*spiffebundle.Bundle,
 		return localFederatedBundleOrNil, nil, fmt.Errorf("failed to fetch federated bundle from endpoint: %w", err)
 	}
 
+	commit := u.commitBundleHook
+	if commit == nil {
+		commit = u.commitFetchedBundle
+	}
+	reportedLocalBundle, endpointFederatedBundleOrNil, err := commit(ctx, localFederatedBundleOrNil, fetchedFederatedBundle, usedBootstrap)
+	if err != nil {
+		return reportedLocalBundle, nil, fmt.Errorf("failed to store fetched federated bundle: %w", err)
+	}
+
+	return reportedLocalBundle, endpointFederatedBundleOrNil, nil
+}
+
+// commitFetchedBundle is the default commit implementation used when the
+// updater is not managed by a generation-aware manager. Writes go directly
+// to the datastore.
+func (u *bundleUpdater) commitFetchedBundle(ctx context.Context, localFederatedBundleOrNil, fetchedFederatedBundle *spiffebundle.Bundle, usedBootstrap bool) (*spiffebundle.Bundle, *spiffebundle.Bundle, error) {
 	if localFederatedBundleOrNil != nil && fetchedFederatedBundle.Equal(localFederatedBundleOrNil) {
 		return localFederatedBundleOrNil, nil, nil
 	}
 
 	bundle, err := bundleutil.SPIFFEBundleToProto(fetchedFederatedBundle)
 	if err != nil {
-		return nil, nil, err
+		return localFederatedBundleOrNil, nil, err
 	}
 	if usedBootstrap {
 		_, err = u.ds.CreateBundle(ctx, bundle)
@@ -97,18 +135,18 @@ func (u *bundleUpdater) UpdateBundle(ctx context.Context) (*spiffebundle.Bundle,
 				// sqlstore maps any constraint violation to AlreadyExists.
 				existing, fetchErr := fetchBundleIfExists(ctx, u.ds, u.td)
 				if fetchErr != nil {
-					return localFederatedBundleOrNil, nil, fmt.Errorf("failed to store fetched federated bundle: %w", fetchErr)
+					return localFederatedBundleOrNil, nil, fetchErr
 				}
 				if existing != nil {
 					return existing, nil, nil
 				}
 			}
-			return localFederatedBundleOrNil, nil, fmt.Errorf("failed to store fetched federated bundle: %w", err)
+			return localFederatedBundleOrNil, nil, err
 		}
 	} else {
 		_, err = u.ds.SetBundle(ctx, bundle)
 		if err != nil {
-			return localFederatedBundleOrNil, nil, fmt.Errorf("failed to store fetched federated bundle: %w", err)
+			return localFederatedBundleOrNil, nil, err
 		}
 	}
 
